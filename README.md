@@ -1,2 +1,2 @@
-# C_TinyJSON
-tiny json for c
+# CPPTinyJSON
+tiny json for cpp
