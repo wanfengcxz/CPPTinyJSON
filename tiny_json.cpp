@@ -12,6 +12,7 @@
 #include <cassert>
 #include <cstring>
 #include <cstdlib>
+#include <cstdio>
 
 #include "tiny_json.h"
 
@@ -274,6 +275,7 @@ namespace tiny_json {
                     }
                     break;
                 default:
+                    // [0x00-0x19]是不可显示字符（已经陈废的控制字符）
                     if ((unsigned char) ch < 0x20) {
                         c.top = start;
                         return PARSE_INVALID_STRING_CHAR;
@@ -482,7 +484,7 @@ namespace tiny_json {
     }
 
     void set_number(Value &v, double num) {
-//        value_free(v);
+        value_free(v);
         v.type = NUMBER;
         v.num = num;
     }
@@ -541,31 +543,114 @@ namespace tiny_json {
         return &v.m[index].v;
     }
 
-//    char *stringify(const Value &v, size_t &len) {
-//
-//    }
+    static void stringify_string(Context &c, const char *str, size_t len) {
+        *(char *) context_push(c, 1) = '"';
+        for (size_t i = 0; i < len; i++) {
+            unsigned char ch = (unsigned char) str[i];
+            switch (ch) {
+                case '\\':
+                    memcpy((char *) context_push(c, 2), "\\\\", 2);
+                    break;
+                case '\"' :
+                    memcpy((char *) context_push(c, 2), "\\\"", 2);
+                    break;
+                case '\b':
+                    memcpy((char *) context_push(c, 2), "\\b", 2);
+                    break;
+                case '\f':
+                    memcpy((char *) context_push(c, 2), "\\f", 2);
+                    break;
+                case '\r':
+                    memcpy((char *) context_push(c, 2), "\\r", 2);
+                    break;
+                case '\n':
+                    memcpy((char *) context_push(c, 2), "\\n", 2);
+                    break;
+                case '\t':
+                    memcpy((char *) context_push(c, 2), "\\t", 2);
+                    break;
+                default:
+                    if (ch < 0x20) {
+                        char buffer[7];
+                        sprintf(buffer, "\\u%04X", ch);
+                        memcpy((char *) context_push(c, 6), buffer, 6);
+                    } else {
+                        *(char *) context_push(c, 1) = str[i];
+                    }
+            }
+
+        }
+        *(char *) context_push(c, 1) = '"';
+    }
+
+    static int stringify_value(Context &c, const Value &v);
+
+    static void stringify_array(Context &c, const Value &v) {
+        *(char *) context_push(c, 1) = '[';
+        for (size_t i = 0; i < v.a_size; i++) {
+            stringify_value(c, v.arr[i]);
+            if (i != v.a_size - 1)
+                *(char *) context_push(c, 1) = ',';
+        }
+        *(char *) context_push(c, 1) = ']';
+    }
+
+    static void stringify_object(Context &c, const Value &v) {
+        *(char *) context_push(c, 1) = '{';
+        for (size_t i = 0; i < v.m_size; i++) {
+            stringify_string(c, v.m[i].k, v.m[i].k_len);
+            *(char *) context_push(c, 1) = ':';
+            stringify_value(c, v.m[i].v);
+            if (i != v.m_size - 1)
+                *(char *) context_push(c, 1) = ',';
+        }
+        *(char *) context_push(c, 1) = '}';
+    }
+
+    static int stringify_value(Context &c, const Value &v) {
+        size_t i;
+        int ret;
+        switch (v.type) {
+            case NUL:
+                memcpy(context_push(c, 4), "null", 4);
+                break;
+            case FALSE:
+                memcpy(context_push(c, 5), "false", 5);
+                break;
+            case TRUE:
+                memcpy(context_push(c, 4), "true", 4);
+                break;
+            case STRING:
+                stringify_string(c, v.str, v.len);
+                break;
+            case NUMBER:
+                c.top -= 32 - sprintf((char *) context_push(c, 32), "%.17g", v.num);
+                break;
+            case ARRAY:
+                stringify_array(c, v);
+                break;
+            case OBJECT:
+                stringify_object(c, v);
+                break;
+            default:
+                break;
+        }
+        return STRINGIFY_OK;
+    }
+
+#define PARSE_STRINGIFY_INIT_SIZE 256
+
+    char *stringify(const Value &v, size_t &len) {
+        Context c;
+        int ret;
+        c.stack = (char *) malloc(PARSE_STRINGIFY_INIT_SIZE);
+        c.size = PARSE_STRINGIFY_INIT_SIZE;
+        c.top = 0;
+        ret = stringify_value(c, v);
+        assert(ret == STRINGIFY_OK);
+        len = c.top;
+        *(char *) context_push(c, 1) = '\0';
+        return c.stack;
+    }
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -30,6 +30,7 @@ namespace tiny_json {
         PARSE_MISS_KEY,
         PARSE_MISS_COLON,
         PARSE_MISS_COMMA_OR_CURLY_BRACKET,
+        STRINGIFY_OK,
     };
 
     struct member;
